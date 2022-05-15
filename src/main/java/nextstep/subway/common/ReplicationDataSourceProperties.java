@@ -42,6 +42,22 @@ public class ReplicationDataSourceProperties {
             return driverClassName;
         }
 
+        public void setUrl(String url) {
+            this.url = url;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public void setDriverClassName(String driverClassName) {
+            this.driverClassName = driverClassName;
+        }
+
     }
 
 }
