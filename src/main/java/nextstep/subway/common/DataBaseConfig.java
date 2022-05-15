@@ -15,6 +15,9 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.stream.IntStream;
 
 import static nextstep.subway.common.ReplicationRoutingDataSource.DATASOURCE_KEY_MASTER;
 import static nextstep.subway.common.ReplicationRoutingDataSource.DATASOURCE_KEY_SLAVE;
@@ -25,31 +28,46 @@ import static nextstep.subway.common.ReplicationRoutingDataSource.DATASOURCE_KEY
 @EnableJpaRepositories(basePackages = {"nextstep.subway"})
 public class DataBaseConfig {
 
-    @Bean
-    @ConfigurationProperties(prefix = "spring.datasource.hikari.master")
-    public DataSource masterDataSource() {
-        return DataSourceBuilder.create().type(HikariDataSource.class).build();
-    }
+//    @Bean
+//    @ConfigurationProperties(prefix = "spring.datasource.hikari.master")
+//    public DataSource masterDataSource() {
+//        return DataSourceBuilder.create().type(HikariDataSource.class).build();
+//    }
+//
+//    @Bean
+//    @ConfigurationProperties(prefix = "spring.datasource.hikari.slave")
+//    public DataSource slaveDataSource() {
+//        return DataSourceBuilder.create().type(HikariDataSource.class).build();
+//    }
 
     @Bean
-    @ConfigurationProperties(prefix = "spring.datasource.hikari.slave")
-    public DataSource slaveDataSource() {
-        return DataSourceBuilder.create().type(HikariDataSource.class).build();
-    }
+    public DataSource routingDataSource(ReplicationDataSourceProperties replicationDataSourceProperties) {
 
-    @Bean
-    public DataSource routingDataSource(@Qualifier("masterDataSource") DataSource master,
-                                        @Qualifier("slaveDataSource") DataSource slave) {
-
-        ReplicationRoutingDataSource routingDataSource = new ReplicationRoutingDataSource();
-
-        HashMap<Object, Object> sources = new HashMap<>();
-        sources.put(DATASOURCE_KEY_MASTER, master);
-        sources.put(DATASOURCE_KEY_SLAVE, slave);
-
+        ReplicationRoutingDataSource routingDataSource = new ReplicationRoutingDataSource(replicationDataSourceProperties.getSlaves().size());
+        Map<Object, Object> sources = createDataSources(replicationDataSourceProperties);
         routingDataSource.setTargetDataSources(sources);
-        routingDataSource.setDefaultTargetDataSource(master);
+        routingDataSource.setDefaultTargetDataSource(sources.get(DATASOURCE_KEY_MASTER));
         return routingDataSource;
+    }
+
+    private Map<Object, Object> createDataSources(ReplicationDataSourceProperties replicationDataSourceProperties) {
+        Map<Object, Object> dataSources = new LinkedHashMap<>();
+        dataSources.put(DATASOURCE_KEY_MASTER, createDataSource(replicationDataSourceProperties.getMaster()));
+
+        IntStream.range(0, replicationDataSourceProperties.getSlaves().size()).forEach(i -> {
+            dataSources.put(String.format("%s-%d", DATASOURCE_KEY_MASTER, i), createDataSource(replicationDataSourceProperties.getSlaves().get(i)));
+        });
+
+        return dataSources;
+    }
+
+    private DataSource createDataSource(ReplicationDataSourceProperties.DataSourceProperty dataSourceProperty) {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl(dataSourceProperty.getUrl());
+        dataSource.setDriverClassName(dataSourceProperty.getDriverClassName());
+        dataSource.setUsername(dataSourceProperty.getUsername());
+        dataSource.setPassword(dataSourceProperty.getPassword());
+        return dataSource;
     }
 
     @Primary
